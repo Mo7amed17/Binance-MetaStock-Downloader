@@ -39,7 +39,7 @@ async function downloadMetaStockCSV(symbol: string, interval: string) {
     const mm = String(date.getUTCMonth() + 1).padStart(2, '0')
     const dd = String(date.getUTCDate()).padStart(2, '0')
     const formattedDate = `${yyyy}${mm}${dd}`
-    csv += `${symbol},${formattedDate},${entry[1]},${entry[2]},${entry[3]},${entry[4]},${entry[5]}\n`
+    csv += `${formattedDate},${entry[1]},${entry[2]},${entry[3]},${entry[4]},${entry[5]}\n`
   })
 
   const blob = new Blob([csv], { type: 'text/csv' })
