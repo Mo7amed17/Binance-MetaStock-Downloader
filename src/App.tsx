@@ -1,4 +1,6 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState } from 'react'
+import { SymbolInput } from './components/SymbolInput'
+import { downloadMetaStockCSV } from './utils/download'
 
 const INTERVALS = [
   { value: '1m', label: '1 Minute' },
@@ -18,84 +20,11 @@ const INTERVALS = [
   { value: '1M', label: 'Monthly' },
 ]
 
-async function downloadMetaStockCSV(symbol: string, interval: string) {
-  const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=1000`
-  const response = await fetch(url)
-
-  if (!response.ok) {
-    throw new Error(`Binance API error: ${response.status}`)
-  }
-
-  const data: string[][] = await response.json()
-
-  if (!Array.isArray(data) || data.length === 0) {
-    throw new Error('No data returned. Check the symbol name.')
-  }
-
-  let csv = ''
-  data.forEach((entry) => {
-    const date = new Date(Number(entry[0]))
-    const yyyy = date.getUTCFullYear()
-    const mm = String(date.getUTCMonth() + 1).padStart(2, '0')
-    const dd = String(date.getUTCDate()).padStart(2, '0')
-    const formattedDate = `${yyyy}${mm}${dd}`
-    csv += `${formattedDate},${entry[1]},${entry[2]},${entry[3]},${entry[4]},${entry[5]}\n`
-  })
-
-  const blob = new Blob([csv], { type: 'text/csv' })
-  const link = document.createElement('a')
-  link.href = URL.createObjectURL(blob)
-  link.download = `${symbol}_${interval}.csv`
-  link.click()
-  URL.revokeObjectURL(link.href)
-}
-
 export default function App() {
   const [symbol, setSymbol] = useState('BTCUSDT')
   const [interval, setInterval] = useState('1d')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [allPairs, setAllPairs] = useState<string[]>([])
-  const [suggestions, setSuggestions] = useState<string[]>([])
-  const [showSuggestions, setShowSuggestions] = useState(false)
-  const wrapperRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    fetch('https://api.binance.com/api/v3/ticker/price')
-      .then((r) => r.json())
-      .then((data: { symbol: string }[]) => {
-        const pairs = data
-          .map((d) => d.symbol)
-          .filter((s) => s.endsWith('USDT'))
-          .sort()
-        setAllPairs(pairs)
-      })
-      .catch(() => {})
-  }, [])
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
-        setShowSuggestions(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
-
-  const handleSymbolChange = (value: string) => {
-    const upper = value.toUpperCase()
-    setSymbol(upper)
-    if (upper.length > 0) {
-      const filtered = allPairs
-        .filter((s) => s.startsWith(upper))
-        .slice(0, 8)
-      setSuggestions(filtered)
-      setShowSuggestions(filtered.length > 0)
-    } else {
-      setShowSuggestions(false)
-    }
-  }
 
   const handleDownload = async () => {
     const sym = symbol.trim().toUpperCase()
@@ -117,44 +46,17 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-gray-900 rounded-2xl shadow-2xl p-8 border border-gray-800">
-        {/* Header */}
+
         <div className="mb-8 text-center">
           <h1 className="text-2xl font-bold text-white">Binance CSV Downloader</h1>
           <p className="text-gray-400 text-sm mt-1">MetaStock format · 1000 candles</p>
         </div>
 
-        {/* Symbol Input */}
-        <div className="mb-5" ref={wrapperRef}>
+        <div className="mb-5">
           <label className="block text-sm font-medium text-gray-300 mb-2">Symbol</label>
-          <div className="relative">
-            <input
-              type="text"
-              value={symbol}
-              onChange={(e) => handleSymbolChange(e.target.value)}
-              onFocus={() => symbol && suggestions.length > 0 && setShowSuggestions(true)}
-              placeholder="e.g. BTCUSDT"
-              className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent placeholder-gray-600 uppercase"
-            />
-            {showSuggestions && (
-              <ul className="absolute z-10 w-full bg-gray-800 border border-gray-700 rounded-lg mt-1 max-h-48 overflow-y-auto">
-                {suggestions.map((s) => (
-                  <li
-                    key={s}
-                    onMouseDown={() => {
-                      setSymbol(s)
-                      setShowSuggestions(false)
-                    }}
-                    className="px-4 py-2 text-white hover:bg-gray-700 cursor-pointer text-sm"
-                  >
-                    {s}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+          <SymbolInput value={symbol} onChange={setSymbol} />
         </div>
 
-        {/* Interval Select */}
         <div className="mb-7">
           <label className="block text-sm font-medium text-gray-300 mb-2">Timeframe</label>
           <select
@@ -163,21 +65,17 @@ export default function App() {
             className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent cursor-pointer"
           >
             {INTERVALS.map((i) => (
-              <option key={i.value} value={i.value}>
-                {i.label}
-              </option>
+              <option key={i.value} value={i.value}>{i.label}</option>
             ))}
           </select>
         </div>
 
-        {/* Error */}
         {error && (
           <div className="mb-5 bg-red-900/40 border border-red-700 text-red-300 rounded-lg px-4 py-3 text-sm">
             {error}
           </div>
         )}
 
-        {/* Download Button */}
         <button
           onClick={handleDownload}
           disabled={loading}
@@ -204,6 +102,7 @@ export default function App() {
         <p className="text-center text-gray-600 text-xs mt-5">
           Data from Binance API · {symbol.trim().toUpperCase() || '—'}_{interval}
         </p>
+
       </div>
     </div>
   )
