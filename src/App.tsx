@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 const INTERVALS = [
   { value: '1m', label: '1 Minute' },
@@ -55,6 +55,47 @@ export default function App() {
   const [interval, setInterval] = useState('1d')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [allPairs, setAllPairs] = useState<string[]>([])
+  const [suggestions, setSuggestions] = useState<string[]>([])
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const wrapperRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    fetch('https://api.binance.com/api/v3/ticker/price')
+      .then((r) => r.json())
+      .then((data: { symbol: string }[]) => {
+        const pairs = data
+          .map((d) => d.symbol)
+          .filter((s) => s.endsWith('USDT'))
+          .sort()
+        setAllPairs(pairs)
+      })
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  const handleSymbolChange = (value: string) => {
+    const upper = value.toUpperCase()
+    setSymbol(upper)
+    if (upper.length > 0) {
+      const filtered = allPairs
+        .filter((s) => s.startsWith(upper))
+        .slice(0, 8)
+      setSuggestions(filtered)
+      setShowSuggestions(filtered.length > 0)
+    } else {
+      setShowSuggestions(false)
+    }
+  }
 
   const handleDownload = async () => {
     const sym = symbol.trim().toUpperCase()
@@ -83,15 +124,34 @@ export default function App() {
         </div>
 
         {/* Symbol Input */}
-        <div className="mb-5">
+        <div className="mb-5" ref={wrapperRef}>
           <label className="block text-sm font-medium text-gray-300 mb-2">Symbol</label>
-          <input
-            type="text"
-            value={symbol}
-            onChange={(e) => setSymbol(e.target.value.toUpperCase())}
-            placeholder="e.g. BTCUSDT"
-            className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent placeholder-gray-600 uppercase"
-          />
+          <div className="relative">
+            <input
+              type="text"
+              value={symbol}
+              onChange={(e) => handleSymbolChange(e.target.value)}
+              onFocus={() => symbol && suggestions.length > 0 && setShowSuggestions(true)}
+              placeholder="e.g. BTCUSDT"
+              className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent placeholder-gray-600 uppercase"
+            />
+            {showSuggestions && (
+              <ul className="absolute z-10 w-full bg-gray-800 border border-gray-700 rounded-lg mt-1 max-h-48 overflow-y-auto">
+                {suggestions.map((s) => (
+                  <li
+                    key={s}
+                    onMouseDown={() => {
+                      setSymbol(s)
+                      setShowSuggestions(false)
+                    }}
+                    className="px-4 py-2 text-white hover:bg-gray-700 cursor-pointer text-sm"
+                  >
+                    {s}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
 
         {/* Interval Select */}
